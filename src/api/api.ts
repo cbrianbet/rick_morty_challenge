@@ -1,40 +1,55 @@
 // api.ts
 import { Location } from './Location';
 import { Resident } from './Resident';
-import { Note } from './Note';
+import {Episode} from "@/api/Episode";
 
-//Notes apis
-const addNote = async (residentId: number, note: string): Promise<Note> => {
-    const response = await fetch(`/api/residents/${residentId}/notes`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ note }),
-    });
-    return response.json();
+//Episodes apis
+const fetchEpisodeDetails = async (episodeUrl: string): Promise<Episode> => {
+    const response = await fetch(episodeUrl);
+    const episodeData = await response.json();
+    return {
+        id: episodeData.id,
+        name: episodeData.name,
+        air_date: episodeData.air_date,
+        episode: episodeData.episode,
+        };
 };
 
 //Residents apis
 const fetchResidentData = async (residentUrl: string): Promise<Resident> => {
     const response = await fetch(residentUrl);
-    return response.json();
+    return  response.json();
 };
 
 //Locations api
-const fetchLocationData = async (locationUrl: string): Promise<Location> => {
-    const response = await fetch(locationUrl);
-    const locationData = await response.json();
+const fetchLocationData = async (): Promise<Location[]> => {
+    let locations: Location[] = [];
+    let nextPage = 'https://rickandmortyapi.com/api/location';
 
-    // Extract relevant information
-    const { id, name, type, residents } = locationData;
+    do {
+        const response = await fetch(nextPage);
+        const locationData = await response.json();
 
-    // Fetch residents' details
-    const residentPromises = residents.map((residentUrl: string) => fetchResidentData(residentUrl));
-    const residentsData: Resident[] = await Promise.all(residentPromises);
+        // Extract relevant information
+        const { results, info } = locationData;
 
-    return { id, name, type, residents: residentsData };
+        // Fetch residents' details for each location
+        const locationPromises = results.map(async (location) => {
+            const { id, name, type, residents } = location;
+            const residentPromises = residents.map((residentUrl: string) => fetchResidentData(residentUrl));
+            const residentsData: Resident[] = await Promise.all(residentPromises);
+            return { id, name, type, residents: residentsData };
+        });
+
+        locations = [...locations, ...await Promise.all(locationPromises)];
+
+        // Update nextPage for the next iteration
+        nextPage = info.next;
+
+    } while (nextPage);
+
+    return locations;
 };
 
 
-export { fetchLocationData, fetchResidentData, addNote };
+export { fetchLocationData, fetchResidentData, fetchEpisodeDetails };
